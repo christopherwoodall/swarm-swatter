@@ -585,15 +585,16 @@ function makeSaber(color) {
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.32, 10),
     new THREE.MeshBasicMaterial({ color: 0x1a1d24 }));
   handle.position.y = 0.16; g.add(handle);
-  const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 2.6, 10),
+  /* blade hit-segment runs local Y 0..4.7 (base at -1.9, tip at +2.8): visual matches hitbox */
+  const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 4.7, 10),
     new THREE.MeshBasicMaterial({ color }));
-  blade.position.y = 1.62; g.add(blade);
+  blade.position.y = 2.35; g.add(blade);
   /* white-hot core: thin additive white cylinder inside the colored blade */
-  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 2.62, 8),
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 4.72, 8),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
-  core.position.y = 1.62; g.add(core);
+  core.position.y = 2.35; g.add(core);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }));
-  glow.scale.set(0.9, 3.4, 1); glow.position.y = 1.62; g.add(glow);
+  glow.scale.set(0.9, 5.4, 1); glow.position.y = 2.35; g.add(glow);
   g.userData.swing = 0;
   scene.add(g);
   return g;
@@ -710,7 +711,7 @@ function spawnBlock(layer, hitT, size, label, bonus) {
   grp.add(cube); grp.add(edges); grp.add(glow); grp.add(arrow); grp.add(lab);
   grp.position.set(LANEX[layer], HIT_Y, -TRACK_LEN);
   scene.add(grp);
-  blocks.push({ grp, hitT, layer, bonus: !!bonus, size, slashed: false, lab, dir: di, mats: [cube.material, edges.material, glow.material, arrow.material] });
+  blocks.push({ grp, hitT, layer, bonus: !!bonus, size, slashed: false, lab, dir: di, glow, mats: [cube.material, edges.material, glow.material, arrow.material] });
 }
 function slash(b, perfect, saber) {
   b.slashed = true;
@@ -953,7 +954,7 @@ function poseSaberGame(s, ctl) {
   const t = tipFromTouch(ctl.x, ctl.y);
   _dir.copy(t).sub(camera.position).normalize();
   u.base.copy(t).addScaledVector(_dir, -1.9);
-  u.tip.copy(t).addScaledVector(_dir, 1.02);
+  u.tip.copy(t).addScaledVector(_dir, 2.8);
   s.position.copy(u.base);
   s.quaternion.setFromUnitVectors(_Y, _dir);
   u.bladeOn = true;
@@ -966,7 +967,7 @@ function segSphereHit(a, b, p, r) {
   return dx * dx + dy * dy + dz * dz < r * r;
 }
 function tryPlayerHit(b, nowMs) {
-  const p = b.grp.position, r = 0.42 * b.size + 0.12;
+  const p = b.grp.position, r = 0.55 * b.size + 0.20;
   for (let i = 0; i < 2; i++) {
     const u = SABERS[i].userData, ctl = u.ctl;
     if (!u.bladeOn || !ctl) continue;
@@ -1123,13 +1124,19 @@ function frame() {
       if (b.slashed) continue;
       const dHit = b.hitT - nowA, LEAD = 2 * bd;
       if (gameMode) {
-        if (Math.abs(dHit) <= 0.18) tryPlayerHit(b, nowMs);
+        /* asymmetric window: connect further out (+0.35s), late edge stays tight */
+        if (dHit <= 0.35 && dHit >= -0.18) tryPlayerHit(b, nowMs);
         if (b.slashed) { blocks.splice(i, 1); continue; }
-        if (dHit < -0.3) { miss(b); scene.remove(b.grp); blocks.splice(i, 1); continue; }
+        if (dHit < -0.25) { miss(b); scene.remove(b.grp); blocks.splice(i, 1); continue; }
       } else if (dHit <= 0.02) { slash(b); blocks.splice(i, 1); continue; }
       b.grp.position.z = -TRACK_LEN * Math.min(1, dHit / LEAD);
       /* gentle hover bob; blocks keep facing the camera so arrows stay readable */
       b.grp.position.y = HIT_Y + Math.sin(nowMs * 0.003 + b.hitT * 7.0) * 0.09;
+      /* proximity telegraph (game mode): glow pulses when a block is about to be hittable */
+      if (gameMode && b.glow) {
+        b.glow.material.opacity = (dHit <= 0.45 && dHit >= -0.25)
+          ? 0.55 + 0.35 * Math.sin(nowMs * 0.02) : 0.4;
+      }
       /* declutter: far block labels fade out */
       const dist = b.grp.position.distanceTo(camera.position);
       b.lab.material.opacity = clamp(1.2 - dist / 60, 0.12, 0.95);
