@@ -1,3 +1,5 @@
+[![SWARM SWATTER](docs/preview.png)](https://christopherwoodall.github.io/swarm-swatter/)
+
 # SWARM SWATTER
 
 91 days of swarm-forensics event data (2026-04-19 → 2026-07-18; 36 nodes, 86 edges, 96,353 annotated events) turned into a playable rhythm slasher. All data is embedded in one self-contained HTML file — no network calls, works offline, mobile-first.
